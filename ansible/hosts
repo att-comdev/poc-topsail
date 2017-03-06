@@ -1,0 +1,16 @@
+
+[bootstrap]
+10.7.183.59
+
+[master]
+10.7.183.6[0:1]
+
+[workers]
+10.7.183.6.2
+
+
+[bootstrap:vars]
+node_master=true
+
+[master:vars]
+node_master=true
