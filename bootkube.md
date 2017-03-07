@@ -2,6 +2,9 @@
 # manually self-hosted via bootkube
 A small howto on how to bring up a self-hosted kubernetes cluster
 
+![Self-Hosted](self-hosted.png?raw=true "Self-hosted")
+
+
 ## temporary apiserver: bootkube
 ### download
 ```
