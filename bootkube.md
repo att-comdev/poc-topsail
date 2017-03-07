@@ -235,3 +235,4 @@ main.go:127] Failed to create SubnetManager: unable to initialize inclusterconfi
 - https://github.com/kubernetes-incubator/bootkube
 - https://github.com/coreos/etcd-operator/
 - http://blog.kubernetes.io/2017/01/stronger-foundation-for-creating-and-managing-kubernetes-clusters.html
+- https://github.com/kubernetes/kubeadm/issues/127
