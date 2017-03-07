@@ -14,6 +14,7 @@ sudo cp bin/linux/bootkube /usr/bin/
 ```
 
 ### render the assets
+Exchange `10.7.183.59` with the node you are working on. If you have DNS available group all master node IP addresses behind a CNAME Record and provide this insted.
 ```
 bootkube render --asset-dir=assets --experimental-self-hosted-etcd --etcd-servers=http://10.3.0.15:2379 --api-servers=https://10.7.183.59:443
 ```
@@ -79,11 +80,14 @@ scp 10.7.183.59:assets/auth/kubeconfig .
 sudo mkdir -p /etc/kubernetes
 sudo mv kubeconfig /etc/kubernetes/
 ```
-install cni binaries
+install cni binaries and download hyperkube
 ```
 sudo mkdir -p /opt/cni/bin
 wget https://github.com/containernetworking/cni/releases/download/v0.4.0/cni-amd64-v0.4.0.tbz2
 sudo tar xjf cni-amd64-v0.4.0.tbz2 -C /opt/cni/bin/
+wget http://storage.googleapis.com/kubernetes-release/release/v1.5.3/bin/linux/amd64/hyperkube -O ./hyperkube
+sudo mv hyperkube /usr/bin/hyperkube
+sudo chmod 755 /usr/bin/hyperkube
 ```
 ### master nodes
 Start the kubelet:
