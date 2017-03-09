@@ -1,0 +1,44 @@
+- name: Ensures bootkube dir exists
+  file: path=/tmp/bootkube state=directory
+
+- name: Extract bootkube binaries
+  unarchive:
+    src: https://github.com/kubernetes-incubator/bootkube/releases/download/v0.3.9/bootkube.tar.gz
+    dest: /tmp/bootkube
+    remote_src: True
+
+- name: Render bootkube manifests
+  command: /tmp/bootkube/bin/linux/bootkube render --asset-dir=/tmp/bootkube/assets --experimental-self-hosted-etcd --etcd-servers=http://10.3.0.15:2379 --api-servers=https://{{ inventory_hostname }}:443
+  args:
+    creates: /etc/kubernetes/kubeconfig
+
+- name: Ensures /etc/kubernetes dir exists
+  file: path=/etc/kubernetes state=directory
+
+- name: copy kubeconfig credentials
+  command: cp /tmp/bootkube/assets/auth/kubeconfig /etc/kubernetes/kubeconfig
+  args:
+    creates: /etc/kubernetes/kubeconfig
+
+- name: copy kubernetes manifests
+  command: cp -a /tmp/bootkube/assets/manifests /etc/kubernetes/
+  args:
+    creates: /etc/kubernetes/manifests
+
+- name: fetch kubeconfig
+  fetch:
+    src: /etc/kubernetes/kubeconfig
+    dest: roles/kubelet/templates/kubeconfig
+    flat: yes
+
+- name: Setup bootkube.service
+  template: 
+    src: bootkube.service
+    dest: /etc/systemd/system/bootkube.service
+
+- name: Run bootkube
+  systemd: 
+    name: bootkube
+    state: started
+    daemon_reload: yes
+    

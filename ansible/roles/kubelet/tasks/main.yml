@@ -1,0 +1,37 @@
+- name: Ensures CNI dir exists
+  file: path=/opt/cni/bin state=directory
+
+- name: Install CNI binaries
+  unarchive:
+    src: https://github.com/containernetworking/cni/releases/download/v0.4.0/cni-amd64-v0.4.0.tbz2
+    dest: /opt/cni/bin
+    remote_src: True
+
+- name: Install kubelet
+  get_url:
+    url: http://storage.googleapis.com/kubernetes-release/release/v1.5.3/bin/linux/amd64/kubelet
+    dest: /usr/bin/kubelet
+    checksum: md5:33af080e876b1f3d481b0ff1ceec3ab8
+    mode: 0755
+
+- name: Ensures /etc/kubernetes dir exists
+  file: path=/etc/kubernetes state=directory
+
+- name: Install kubeconfig
+  template:
+    src: kubeconfig
+    dest: /etc/kubernetes/kubeconfig
+
+- name: Setup kubelet.service
+  template: 
+    src: kubelet.service
+    dest: /etc/systemd/system/kubelet.service
+  notify: restart kubelet
+
+- name: Enable Kubelet to be started on boot
+  systemd: 
+    name: kubelet
+    state: started
+    enabled: yes
+    daemon_reload: yes
+

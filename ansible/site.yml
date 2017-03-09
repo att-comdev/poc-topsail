@@ -1,0 +1,22 @@
+- hosts: bootstrap
+  remote_user: ubuntu
+  become: yes
+  become_method: sudo
+  roles:
+    - bootstrap
+    - kubelet
+
+- hosts: master
+  remote_user: ubuntu
+  become: yes
+  become_method: sudo
+  roles:
+    - kubelet
+
+- hosts: workers
+  remote_user: ubuntu
+  become: yes
+  become_method: sudo
+  roles:
+    - kubelet
+
