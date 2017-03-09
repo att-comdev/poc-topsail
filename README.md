@@ -3,14 +3,14 @@ A small howto on how to bring up a self-hosted kubernetes cluster
 
 We'll use [bootkube](https://github.com/kubernetes-incubator/bootkube) to initiate the master-components. First we'll render the assets necessary for bringing up the control plane (apiserver, controller-manger, scheduler, etc). Then we'll start the kubelets which job is it to start the assets but can't do much, because there's no API-server yet. Running `bootkube` once will kick things off then. At a high-level the bootstrapping process looks like this:
 
-![Self-Hosted](../img/self-hosted-moving-parts.png?raw=true "Self-hosted-moving-parts")
+![Self-Hosted](./img/self-hosted-moving-parts.png?raw=true "Self-hosted-moving-parts")
 
 Image taken from the [self-hosted proposal](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/self-hosted-kubernetes.md).
 
 
 This is how the final cluster looks like from a `kubectl` perspective:
 
-![Screenshot](../img/self-hosted.png?raw=true "Screenshot")
+![Screenshot](./img/self-hosted.png?raw=true "Screenshot")
 
 Let's start!
 ## Temporary apiserver: `bootkube`
