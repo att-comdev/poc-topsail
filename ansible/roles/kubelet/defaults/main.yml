@@ -1,0 +1,2 @@
+#Default Override-able variables for the Kubelet role
+cni_version: "v0.4.0"
