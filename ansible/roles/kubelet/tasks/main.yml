@@ -1,12 +1,17 @@
+#Deploys Kubelet
+
 - name: Ensures CNI dir exists
-  file: path=/opt/cni/bin state=directory
+  file:
+    path: /opt/cni/bin
+    state: directory
 
 - name: Install CNI binaries
   unarchive:
-    src: https://github.com/containernetworking/cni/releases/download/v0.4.0/cni-amd64-v0.4.0.tbz2
+    src: "https://github.com/containernetworking/cni/releases/download/{{ cni_version }}/cni-amd64-{{ cni_version }}.tbz2"
     dest: /opt/cni/bin
     remote_src: True
 
+#TODO: Version kubelet, with checksum
 - name: Install kubelet
   get_url:
     url: http://storage.googleapis.com/kubernetes-release/release/v1.5.3/bin/linux/amd64/kubelet
@@ -15,23 +20,25 @@
     mode: 0755
 
 - name: Ensures /etc/kubernetes dir exists
-  file: path=/etc/kubernetes state=directory
+  file:
+    path: /etc/kubernetes
+    state: directory
 
+#Gets Kubeconfig from the bootstrap node. See roles/bootstrap/tasks/main.yml
 - name: Install kubeconfig
   template:
     src: kubeconfig
     dest: /etc/kubernetes/kubeconfig
 
 - name: Setup kubelet.service
-  template: 
+  template:
     src: kubelet.service
     dest: /etc/systemd/system/kubelet.service
   notify: restart kubelet
 
 - name: Enable Kubelet to be started on boot
-  systemd: 
+  systemd:
     name: kubelet
     state: started
     enabled: yes
     daemon_reload: yes
-
