@@ -18,4 +18,4 @@ api_server_fqdn="kubeapi.test.local"
 
 [master:vars]
 node_master=true
-cni_version="v0.4.0"
+cni_version="v0.5.0"
