@@ -1,2 +1,9 @@
 #Default Override-able variables for the Kubelet role
 cni_version: "v0.5.0"
+hyperkube_version: "v1.5.3"
+kubelet_version: "v1.5.3"
+calicoctl_version: "v1.1.0"
+
+#Calico Peering - Physical Switch Fabric IPs
+calico_peer1: 10.23.21.2
+calico_peer2: 10.23.21.3

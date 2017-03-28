@@ -4,7 +4,7 @@
   become_method: sudo
   roles:
     - bootstrap
-    - kubelet
+#    - kubelet
 
 - hosts: master
   remote_user: ubuntu
@@ -12,6 +12,8 @@
   become_method: sudo
   roles:
     - kubelet
+    - deploy_helm
+    - deploy_maas
 
 - hosts: workers
   remote_user: ubuntu
@@ -19,4 +21,3 @@
   become_method: sudo
   roles:
     - kubelet
-
