@@ -1,5 +1,24 @@
 #Deploys Bootstrap Node
 
+- name: Install base packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - "docker.io"
+    - "vim"
+    - "ethtool"
+    - "traceroute"
+    - "git"
+    - "build-essential"
+    - "lldpd"
+
+- name: Insert Temporary Hosts File Entry for FQDN Resolution
+  lineinfile:
+    dest: /etc/hosts
+    line: "{{ hostvars[groups['master'][0]]['ansible_default_ipv4']['address'] }} {{ api_server_fqdn }}"
+    state: present
+
 - name: Ensures bootkube dir exists
   file:
     path: /tmp/bootkube
@@ -15,6 +34,25 @@
   command: "/tmp/bootkube/bin/linux/bootkube render --asset-dir=/tmp/bootkube/assets --experimental-self-hosted-etcd --etcd-servers=http://10.3.0.15:2379 --api-servers=https://{{ api_server_fqdn }}:443"
   args:
     creates: /etc/kubernetes/kubeconfig
+
+# - name: Remove Uneeded manifests
+#   file:
+#     path: "/tmp/bootkube/assets/manifests/{{ item }}"
+#     state: absent
+#   with_items:
+#     - kube-flannel-cfg.yaml
+#     - kube-flannel.yaml
+
+- name: Inject Custom manifests - kube-calico.yaml
+  template:
+    src: kube-calico.yaml.j2
+    dest: "/tmp/bootkube/assets/manifests/kube-flannel.yaml"
+
+- name: Inject Custom manifests - kube-calico-cfg.yaml
+  template:
+    src: kube-calico-cfg.yaml.j2
+    dest: "/tmp/bootkube/assets/manifests/kube-flannel-cfg.yaml"
+
 
 - name: Ensures /etc/kubernetes dir exists
   file:

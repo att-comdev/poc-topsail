@@ -1,0 +1,117 @@
+# - name: Label nodes
+#   shell: "hyperkube kubectl label nodes {{ item }}=enabled --all"
+# #  when: deploy_pods_master == true
+#   with_items:
+#     - "{{ kube_labels }}"
+#   register: kube_labeled_out
+#   failed_when: "'already has a value' not in kube_labeled_out.stdout"
+
+# - name: Enable Scheduling of Pods on master
+#   shell: "hyperkube kubectl taint nodes {{ ansible_hostname }} dedicated:NoSchedule-"
+# #  when: deploy_pods_master == true
+
+- name: Install Ceph
+  apt:
+    name: ceph-common
+    state: present
+  register: ceph_installed
+
+- name: Create Ceph and OpenStack-Helm directories
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - "/var/lib/openstack-helm/ceph/osd"
+    - "/var/lib/openstack-helm/ceph/ceph"
+    - "/var/lib/openstack-helm/ceph/mon"
+    - "/var/lib/nova/instances"
+
+- name: Install Sigil for Ceph Secrets
+  shell: curl -L https://github.com/gliderlabs/sigil/releases/download/v0.4.0/sigil_0.4.0_Linux_x86_64.tgz | tar -zxC /usr/local/bin
+  when: ceph_installed | changed
+
+- name: Capture kubernetes version
+  shell: kubelet --version | cut -d " " -f2
+  register: kube_version
+
+# - name: Deploy kube config
+#   template:
+#     src: templates/kube-controller-manager.json.j2
+#     dest: /etc/kubernetes/manifests/kube-controller-manager.json
+#   register: kube_controller_manager
+#
+# - name: Restart kubelet
+#   service:
+#     name: kubelet
+#     state: restarted
+#   when: kube_controller_manager | changed
+#
+# - action: shell hyperkube kubectl get pods -o wide --all-namespaces | grep kube-controller-manager
+#   register: kcm_output
+#   until: kcm_output.stdout.find("Running") != -1
+#   retries: 20
+#   delay: 15
+
+- name: Check for Kubernetes dashboard
+  shell: hyperkube kubectl get pods -o wide --all-namespaces | grep kubernetes-dashboard
+  register: dashboard_check
+  ignore_errors: true
+
+- name: Deploy Kubernetes Dashboard
+  shell: hyperkube kubectl create -f https://rawgit.com/kubernetes/dashboard/master/src/deploy/kubernetes-dashboard.yaml
+  when: dashboard_check | failed
+
+- name: Check if Helm is installed
+  stat:
+    path: /usr/local/bin/helm
+  register: helm_installed
+
+- name: Install helm
+  shell: curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get > /root/get_helm.sh
+  when: helm_installed.stat.exists == False
+
+- name: Set file properties
+  file:
+    path: /root/get_helm.sh
+    mode: 0700
+  when: helm_installed.stat.exists == False
+
+- name: Install helm
+  shell: sh /root/get_helm.sh
+  when: helm_installed.stat.exists == False
+
+- name: Create directories for OpenStack Helm
+  file:
+    path: /opt/openstack-helm/repos/openstack-helm
+    state: directory
+
+- name: Checkout OpenStack-Helm
+  git:
+    repo: https://github.com/att-comdev/openstack-helm.git
+    dest: /opt/openstack-helm/repos/openstack-helm
+    update: true
+
+- name: Check for Helm/Tiller
+  shell: hyperkube kubectl get pods --namespace kube-system | grep tiller
+  ignore_errors: true
+  register: helm_running
+
+- name: Initialize Helm/Tiller
+  shell: helm init --home /opt/openstack-helm/repos/openstack-helm/.helm
+  environment:
+    HELM_HOME: /opt/openstack-helm/repos/openstack-helm/.helm
+  when: helm_running | failed
+
+- name: Helm Serve
+  shell: nohup helm serve --repo-path /opt/openstack-helm/repos/openstack-helm/.helm/repository/local &
+  environment:
+    HELM_HOME: /opt/openstack-helm/repos/openstack-helm/.helm
+  args:
+    chdir: /opt/openstack-helm/repos/openstack-helm/.helm
+  when: helm_running | failed
+
+- name: Add helm repositories
+  shell: helm repo add local http://localhost:8879/charts --home /opt/openstack-helm/repos/openstack-helm/.helm
+  args:
+    chdir: /opt/openstack-helm/repos/openstack-helm/.helm
+  when: helm_running | failed

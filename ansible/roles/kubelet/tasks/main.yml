@@ -1,5 +1,34 @@
 #Deploys Kubelet
 
+- name: Install base packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - "docker.io"
+    - "vim"
+    - "ethtool"
+    - "traceroute"
+    - "git"
+    - "build-essential"
+    - "lldpd"
+
+- name: Insert Temporary Hosts File Entry for FQDN Resolution
+  lineinfile:
+    dest: /etc/hosts
+    line: "{{ hostvars[groups['master'][0]]['ansible_default_ipv4']['address'] }} {{ api_server_fqdn }}"
+    state: present
+
+- name: Downloads Hyperkube
+  get_url:
+    url: "http://storage.googleapis.com/kubernetes-release/release/{{ hyperkube_version }}/bin/linux/amd64/hyperkube"
+    dest: /usr/bin/hyperkube
+
+- name: Set hyperkube permissions
+  file:
+    path: /usr/bin/hyperkube
+    mode: 0755
+
 - name: Ensures CNI dir exists
   file:
     path: /opt/cni/bin
@@ -7,16 +36,16 @@
 
 - name: Install CNI binaries
   unarchive:
-    src: "https://github.com/containernetworking/cni/releases/download/{{ cni_version }}/cni-amd64-{{ cni_version }}.tbz2"
+    src: "https://github.com/containernetworking/cni/releases/download/{{ cni_version }}/cni-amd64-{{ cni_version }}.tgz"
     dest: /opt/cni/bin
     remote_src: True
 
 #TODO: Version kubelet, with checksum
 - name: Install kubelet
   get_url:
-    url: http://storage.googleapis.com/kubernetes-release/release/v1.5.3/bin/linux/amd64/kubelet
+    url: "http://storage.googleapis.com/kubernetes-release/release/{{ kubelet_version }}/bin/linux/amd64/kubelet"
     dest: /usr/bin/kubelet
-    checksum: md5:33af080e876b1f3d481b0ff1ceec3ab8
+#    checksum: md5:33af080e876b1f3d481b0ff1ceec3ab8
     mode: 0755
 
 - name: Ensures /etc/kubernetes dir exists
@@ -42,3 +71,121 @@
     state: started
     enabled: yes
     daemon_reload: yes
+
+- name: Create Directories for Kubernetes manifests
+  file:
+    path: /opt/openstack-helm/manifests
+    state: directory
+
+#Wait for Kubeapi Server to come up
+- action: shell hyperkube kubectl get pods --all-namespaces | grep kube-apiserver
+  register: kubeapi_output
+  until: kubeapi_output.stdout.find("Running") != -1
+  retries: 40
+  delay: 15
+
+#Wait for cluster to stabilize across all  nodes
+- action: shell hyperkube kubectl get pods --all-namespaces
+  register: cluster_stable
+  until: '"ContainerCreating" not in cluster_stable.stdout'
+  retries: 40
+  delay: 15
+# - name: Pause Deploy
+#   pause:
+#     minutes: 2
+
+- name:  Grab the ETCD IP
+  shell: hyperkube kubectl get services --all-namespaces | grep "etcd-service" | awk '{ print $3 }'
+  register: etcd_service_ip
+
+# - name: Deploy Calico manifest template
+#   template:
+#     src: calico.yaml
+#     dest: /opt/openstack-helm/manifests/calico.yaml
+#   register: calico_changed
+#
+# - name: Install calicoctl tool
+#   get_url:
+#     url: "https://github.com/projectcalico/calicoctl/releases/download/{{ calicoctl_version }}/calicoctl"
+#     dest: /usr/bin/calicoctl
+#     validate_certs: false
+#     mode: 0755
+#
+# - name: Check for Calico deployment
+#   shell: hyperkube kubectl get services --all-namespaces | grep calico
+#   ignore_errors: True
+#   register: calico_deployed
+#
+# - name: Deploy BGP Peer Manifest (1)
+#   template:
+#     src: calico-peer.yaml
+#     dest: /opt/openstack-helm/manifests/calico-peer.yaml
+#
+# - name: Deploy BGP Peer Manifest (2)
+#   template:
+#     src: calico-peer2.yaml
+#     dest: /opt/openstack-helm/manifests/calico-peer2.yaml
+#
+# - name: Create Calico Pods
+#   shell: hyperkube kubectl create -f /opt/openstack-helm/manifests/calico.yaml
+#   when: calico_deployed | failed and "{{ inventory_hostname }} in groups['bootstrap']"
+#
+# - action: shell hyperkube kubectl get pods --all-namespaces | grep calico
+#   register: calico_output
+#   until: calico_output.stdout.find("Running") != -1
+#   retries: 20
+#   delay: 15
+#
+# - name: Create BGP Peering(1)
+#   shell: calicoctl create -f /opt/openstack-helm/manifests/calico-peer.yaml --skip-exists
+#   environment:
+#     ETCD_ENDPOINTS: "http://{{ etcd_service_ip.stdout }}:2379"
+#   when: calico_deployed | failed and "{{ inventory_hostname }} in groups['bootstrap']"
+#
+# - name: Create BGP Peering(2)
+#   shell: calicoctl create -f /opt/openstack-helm/manifests/calico-peer2.yaml --skip-exists
+#   environment:
+#     ETCD_ENDPOINTS: "http://{{ etcd_service_ip.stdout }}:2379"
+#   when: calico_deployed | failed and "{{ inventory_hostname }} in groups['bootstrap']"
+
+- name: Check ClusterHA in KubeDNS
+  shell: hyperkube kubectl get services --all-namespaces | grep cluster-ha
+  ignore_errors: true
+  register: cluster_ha_present
+
+
+- name: Install ClusterHA ConfigMaps
+  template:
+    src: cluster-ha.j2
+    dest: /opt/openstack-helm/manifests/cluster-ha.yaml
+  register: cluster_ha_configmaps
+
+- name: Delete ClusterHA if present
+  shell: hyperkube kubectl delete -f /opt/openstack-helm/manifests/cluster-ha.yaml
+  when: cluster_ha_present | succeeded and cluster_ha_configmaps | changed
+  ignore_errors: true
+
+- name: Deploy ClusterHA ConfigMaps
+  shell: hyperkube kubectl create -f /opt/openstack-helm/manifests/cluster-ha.yaml
+  when: cluster_ha_configmaps | changed
+
+- name: Determine KubeDNS Server
+  shell: hyperkube kubectl get svc kube-dns --namespace=kube-system | awk '{print $2}' | sed -n '$p'
+  register: kube_dns_server
+
+- name: Add KubeDNS to /etc/resolv.conf
+  lineinfile:
+    dest: /etc/resolv.conf
+    insertafter: "^#     DO"
+    line: "nameserver {{ kube_dns_server.stdout }}"
+    state: present
+    backup: true
+
+- name: Remove /etc/hosts entry if present
+  lineinfile:
+    dest: /etc/hosts
+    line: "{{ hostvars[groups['master'][0]]['ansible_default_ipv4']['address'] }} {{ api_server_fqdn }}"
+    state: absent
+
+- name: Test Kubernetes cluster
+  shell: hyperkube kubectl get nodes
